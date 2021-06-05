@@ -22,6 +22,6 @@ In order to run the program:
 1. git clone https://github.com/AssaSch/itunes-apps-scraper.git
 2. cd itunes-apps-scraper
 3. npm install
-4. node index.js \<path-to-file\> (there is an example file in: "files/app.txt").
+4. node index.js \<path-to-file\> (there is an example file in: "files/apps.txt").
 
 Enjoy!
