@@ -1,6 +1,7 @@
 # ITunes applications scraper
 
 ITunes scraper is written using node.js version 14.
+It consists of the main module "ITunesScraper" which uses modules "DataFetcher" and "DataAggregator".
 
 Main considerations:
 1. The main bottle-neck of this program is the http requests to get applications data, which node handles really well due to its async non-blocking architecture.
@@ -9,12 +10,10 @@ Main considerations:
 4. I used the open source package "natural" for tf-idf calculations.
 5. I didn't use cache for the requests as I assumed each app id in the file will be unique.
 
-This scales quite well and in tests I did it handled file with 10,000 ids in 30 seconds and a file with 100,000 ids in 12 minutes.
-
 Things to do for scaling to million apps and more:
-1. Save corpus to disk and not in memory.
-2. After doing 1, we can split the part that is in charge of sending requests and saving them to corpus and create several instances of it.
-   Each instance will get a batch of apps ids and all instances will save the data to the same corpus on disk.
+1. Run each one of the 3 modules in different process/docker.
+2. Make sure to save corpus to disk and not in memory.
+3. Scale each one of the processes/dockers according to bottle-necks. In our use-case we will probably need to create more instances of DataFetcher process/docker to handle http requests better.
 
 
 In order to run the program:

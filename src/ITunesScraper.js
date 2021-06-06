@@ -1,27 +1,21 @@
 const fs = require('fs');
 const readline = require('readline');
-const axios = require('axios');
-const axiosRetry = require('axios-retry');
-const natural = require('natural');
 const logger = require('./logs/logger');
-const TfIdf = natural.TfIdf;
-axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+const DataFetcher = require('./DataFetcher');
+const DataAggregator = require('./DataAggregator');
  
 class ITunesScraper {
     /**
-     * @param {string} textFilePath  - Path to text file.
-     * @param {object} httpClient    - Client to use for http requests. Use "axios" as default.
-     * @param {object} TfIdfInstance - Library to use for tf-idf calculation. Use TfIdf from "natural" npm package as default.
-     * @param {number} batchSize     - Number of requests to send in each batch. Defaults to 100.
+     * @param {string} textFilePath - Path to text file.
+     * @param {number} batchSize    - Number of requests to send in each batch.
      */
-    constructor({ textFilePath, httpClient, TfIdfInstance, batchSize } = {}) {
+    constructor({ textFilePath, batchSize } = {}) {
         if (!textFilePath) {
             throw new Error(`Path for text file was not provided!`);
         }
-        this._client = httpClient || axios;
-        this._tfidf = TfIdfInstance || new TfIdf();
         this._batchSize = batchSize || 100;
-        this._appIds = [];
+        this._dataFetcher = new DataFetcher();
+        this._dataAggregator = new DataAggregator();
         this._readInterface = readline.createInterface({
             input: fs.createReadStream(textFilePath),
         });
@@ -35,7 +29,7 @@ class ITunesScraper {
      */
     async run() {
         await this._processFile();
-        this._printTopTfidfWordsPerApp(10);
+        this._dataAggregator.printTopTfidfWordsPerApp(10);
     }
 
     /**
@@ -55,81 +49,38 @@ class ITunesScraper {
             appsIdsString += `${line},`;
             appsCounter++;
             if (appsCounter % numberOfIdsInRequest === 0) {
-                requestPromises.push(this._addAppsDescriptionsToCorpus(appsIdsString));
+                requestPromises.push(this._dataFetcher.getAppsData(appsIdsString));
                 appsIdsString = '';
             }
             if (requestPromises.length === this._batchSize) {
-                await Promise.all(requestPromises);
+                const appsRequestsData = await Promise.all(requestPromises);
+                appsRequestsData.forEach(appsData => this._dataAggregator.addAppsDescriptionsToCorpus(appsData));
                 this._emptyArray(requestPromises);
             }
         } 
 
-        await this._getRemainingAppsData(appsIdsString, requestPromises);
+        await this._addRemainingAppsDescriptionsToCorpus(appsIdsString, requestPromises);
 
         logger.info(`Finished Adding all documents`);
     }
     
     /**
-     * Add application description to tf-idf corpus.
-     * @param {string} appsIdsString - String of Itunes application id with comma delimited.
-     * @returns {void}
-     */
-    async _addAppsDescriptionsToCorpus(appsIdsString) {
-        try {
-            const appsInfo = await this._client.get(`${ITunesScraper._ITUNES_APP_LOOKUP_ENDPOINT}?id=${appsIdsString}`);
-            if (!appsInfo.data || !appsInfo.data.resultCount) {
-                logger.warn(`Apps with ids: ${appsIds} does not exist!`);
-                return;
-            }
-
-            for (const appData of appsInfo.data.results) {
-                this._tfidf.addDocument(appData.description);
-                this._appIds.push(appData.trackId);
-                logger.info(`Finished Adding app ${appData.trackId} to corpus.`);
-            }
-        } catch (err) {
-            logger.error(`Failed adding apps ${appsIds} to corpus: Error: ${err.message}, Stack: ${err.stack}`);
-        }
-    }
-
-    /**
-     * Print top tf-idf words for each application description.
-     * @param {string} numberOfTopWords - Number of top words to print for each application description.
-     * @returns {void}
-     */
-    _printTopTfidfWordsPerApp(numberOfTopWords) {
-        const numbersAfterTheDot = 4;
-        for (let i = 0; i < this._appIds.length; i++) {
-            const appTermsList = this._tfidf.listTerms(i);
-            let topAppWords = `${this._appIds[i]}: `;
-            for (let j = 0; j < numberOfTopWords && appTermsList[j]; j++) {
-                topAppWords += `${appTermsList[j].term} ${appTermsList[j].tfidf.toFixed(numbersAfterTheDot)}`;
-                if (j !== numberOfTopWords - 1) {
-                    topAppWords += ', '
-                }
-            }
-            logger.info(topAppWords);
-        }
-    }
-
-    /**
      * Send request for remaining apps ids and wait for all requests to finish.
-     * @param {string} appsIdsString - String of Itunes application id with comma delimited.
-     * @param {array} requestPromises - Array of requests promises to be resolved.
+     * @param {string} appsIdsString  - String of Itunes application id with comma delimited.
+     * @param {array<Promise>} requestPromises - Array of requests promises to be resolved.
      * @returns {void}
      */
-    async _getRemainingAppsData(appsIdsString, requestPromises) {
+    async _addRemainingAppsDescriptionsToCorpus(appsIdsString, requestPromises) {
         if (appsIdsString) {
-            requestPromises.push(this._addAppsDescriptionsToCorpus(appsIdsString));
+            requestPromises.push(this._dataFetcher.getAppsData(appsIdsString));
         }
-        await Promise.all(requestPromises);
+        const appsRequestsData = await Promise.all(requestPromises);
+        appsRequestsData.forEach(appsData => this._dataAggregator.addAppsDescriptionsToCorpus(appsData));
     }
 
     _emptyArray(arr) {
         arr.splice(0, arr.length);
     }
 }
-
-ITunesScraper._ITUNES_APP_LOOKUP_ENDPOINT = 'http://itunes.apple.com/lookup';
 
 module.exports = ITunesScraper;
