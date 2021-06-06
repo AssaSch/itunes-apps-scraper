@@ -12,7 +12,7 @@ class ITunesScraper {
      * @param {string} textFilePath  - Path to text file.
      * @param {object} httpClient    - Client to use for http requests. Use "axios" as default.
      * @param {object} TfIdfInstance - Library to use for tf-idf calculation. Use TfIdf from "natural" npm package as default.
-     * @param {number} batchSize     - Number of requests to send in each batch.
+     * @param {number} batchSize     - Number of requests to send in each batch. Defaults to 100.
      */
     constructor({ textFilePath, httpClient, TfIdfInstance, batchSize } = {}) {
         if (!textFilePath) {
