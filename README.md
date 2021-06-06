@@ -1,6 +1,7 @@
 # ITunes applications scraper
 
 ITunes scraper is written using node.js version 14.
+
 It consists of the main module "ITunesScraper" which uses modules "DataFetcher" and "DataAggregator".
 
 Main considerations:
